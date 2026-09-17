@@ -73,3 +73,10 @@ The next areas I will focus on are:
 * Troubleshooting
 * Bandit
 * SadServers
+
+
+## Screenshot
+
+The screenshot below shows the verification commands and their output after completing the Linux environment setup.
+
+![Linux environment setup verification](../screenshots/linux-environment-setup.png)
