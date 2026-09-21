@@ -39,13 +39,11 @@ pwd
 uname -a
 Linux ahmed 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026 x86_64 GNU/Linux
 
-This displays information about the kernel and operating system.
 
 
 ```bash
 whoami
 ahmed
-This shows the username of the currently logged-in user.
 
 
 ```bash
