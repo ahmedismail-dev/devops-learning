@@ -18,8 +18,8 @@ The infrastructure consists of a custom VPC with two subnets:
 | Resource | Configuration |
 |---|---|
 | VPC | 10.0.0.0/16 |
-| Public subnet | 10.0.1.0/24 |
-| Private subnet | 10.0.2.0/24 |
+| Public subnet | 10.0.0.0/24 |
+| Private subnet | 10.0.1.0/24 |
 | Internet Gateway | Attached to the VPC |
 | Elastic IP | Allocated for NAT Gateway |
 | NAT Gateway | Deployed in public subnet |
@@ -135,7 +135,6 @@ After completing the project, the resources should be deleted to avoid unnecessa
 
 - [Architecture](docs/architecture.md)
 - [Deployment Notes](docs/deployment-notes.md)
-- ![Architecture](screenshots/01-architecture.png)
 
 ---
 
