@@ -34,8 +34,8 @@ Created a custom VPC with the CIDR block `10.0.0.0/16`.
 
 Divided the network into two subnets:
 
-- Public subnet: `10.0.1.0/24`
-- Private subnet: `10.0.2.0/24`
+- Public subnet: `10.0.0.0/24`
+- Private subnet: `10.0.1.0/24`
 
 This separation provides control over which resources can be reached directly from the internet.
 
