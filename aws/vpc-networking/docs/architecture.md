@@ -1,55 +1,106 @@
-# Architecture Overview
+# Architecture Design
 
-## Network Design
+## 1. Network Overview
 
-The project uses a single custom VPC with two subnets, each serving a different purpose.
+The infrastructure uses a single Amazon VPC with two subnets:
 
-| Component | Purpose |
-|---|---|
-| VPC | Provides an isolated network environment |
-| Public subnet | Hosts resources that require direct internet connectivity |
-| Private subnet | Isolates resources from direct internet access |
-| Internet Gateway | Provides internet connectivity to the public subnet |
-| NAT Gateway | Allows private instances to initiate outbound internet connections |
-| Route tables | Determine where network traffic is sent |
-| Security groups | Control inbound and outbound instance traffic |
+- A public subnet for internet-facing infrastructure.
+- A private subnet for resources that should not be directly accessible from the internet.
 
-## Traffic Flow
+Both subnets use the VPC's local route for internal communication.
 
-### Public EC2 → Internet
+## 2. Network Addressing
 
-1. The instance sends traffic to an external destination.
-2. The public route table directs traffic to the Internet Gateway.
-3. The Internet Gateway provides connectivity to the internet.
+| Network | CIDR | Purpose |
+|---|---|---|
+| VPC | `10.0.0.0/16` | Main network |
+| Public subnet | `10.0.0.0/24` | Public EC2 and NAT Gateway |
+| Private subnet | `10.0.1.0/24` | Private EC2 |
 
-### Private EC2 → Internet
+The two `/24` subnets provide separate address ranges within the larger `/16` VPC.
 
-1. The private instance initiates an outbound connection.
-2. The private route table forwards traffic to the NAT Gateway.
-3. The NAT Gateway translates the private source address using its Elastic IP.
-4. Traffic leaves the VPC through the Internet Gateway.
-5. Return traffic is forwarded back to the private instance.
+## 3. Routing Design
 
-### Public EC2 → Private EC2
+Each subnet is associated with its own route table.
 
-The public instance can connect to the private instance over SSH because the private instance's security group allows inbound SSH traffic from the public instance's security group.
+### Public route table
 
-The private instance does not need a public IP address for this communication.
+| Destination | Target | Purpose |
+|---|---|---|
+| `10.0.0.0/16` | Local | Internal VPC traffic |
+| `0.0.0.0/0` | Internet Gateway | External traffic |
 
-## Important Networking Concepts
+The Internet Gateway provides the internet path for resources with appropriate public addressing and security rules.
 
-**Internet Gateway vs. NAT Gateway**
+### Private route table
 
-An Internet Gateway enables internet connectivity for resources with appropriate public addressing and routing.
+| Destination | Target | Purpose |
+|---|---|---|
+| `10.0.0.0/16` | Local | Internal VPC traffic |
+| `0.0.0.0/0` | NAT Gateway | Outbound internet traffic |
 
-A NAT Gateway allows instances in private subnets to initiate outbound internet connections without requiring public IP addresses.
+The private subnet does not have a direct route to the Internet Gateway.
 
-**Public vs. Private Subnets**
+## 4. Internet Gateway
 
-A subnet is considered public or private based on its routing configuration, not simply its name.
+The Internet Gateway is attached to the VPC.
 
-A public subnet has a route to an Internet Gateway. A private subnet does not have a direct route to an Internet Gateway.
+It enables communication between the VPC and the internet when the relevant routing, public addressing and security configuration are in place.
 
-**Security Groups**
+An Internet Gateway does not automatically make every resource inside the VPC publicly accessible.
 
-Security groups act as stateful virtual firewalls attached to AWS resources. They control which traffic is permitted to reach the instances.
+## 5. NAT Gateway
+
+The NAT Gateway is deployed in the public subnet and associated with an Elastic IP.
+
+Private instances send internet-bound traffic to the NAT Gateway through their route table.
+
+The NAT Gateway performs source network address translation and forwards traffic through the Internet Gateway.
+
+Return traffic is translated back to the originating private instance.
+
+The NAT Gateway provides outbound connectivity. It does not allow unsolicited inbound internet connections to private instances.
+
+## 6. Instance Communication
+
+### Public instance
+
+The public EC2 instance has a public IPv4 address and uses the public route table.
+
+SSH and HTTP inbound access are restricted to my public IP address.
+
+### Private instance
+
+The private EC2 instance has no public IPv4 address.
+
+Its security group permits SSH from the public EC2 security group.
+
+Communication between the two instances uses the VPC's local route, not the NAT Gateway.
+
+## 7. Security Design
+
+Security groups are attached to the EC2 instances.
+
+| Resource | Inbound traffic | Source |
+|---|---|---|
+| Public EC2 | TCP 22 | My public IP |
+| Public EC2 | TCP 80 | My public IP |
+| Private EC2 | TCP 22 | Public EC2 security group |
+
+Security groups are stateful, so response traffic for permitted connections is automatically allowed.
+
+The private instance has no direct public internet entry point.
+
+## 8. Design Limitations
+
+This design is intended to demonstrate foundational networking concepts.
+
+It uses one public subnet, one private subnet and a single NAT Gateway.
+
+For a more resilient architecture, I would consider:
+
+- Deploying public and private subnets in multiple Availability Zones.
+- Adding a NAT Gateway in each Availability Zone.
+- Using Systems Manager Session Manager for administration.
+- Enabling VPC Flow Logs.
+- Monitoring network traffic and NAT Gateway usage.

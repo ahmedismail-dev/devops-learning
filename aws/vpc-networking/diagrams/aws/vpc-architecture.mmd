@@ -1,0 +1,43 @@
+
+flowchart TB
+    Internet((Internet))
+
+    subgraph AWS["AWS Cloud"]
+        subgraph VPC["VPC | 10.0.0.0/16"]
+            IGW["Internet Gateway"]
+
+            subgraph PUBLIC["Public subnet | 10.0.0.0/24"]
+                PRT["Public route table<br/>0.0.0.0/0 → IGW"]
+                PEC2["Public EC2<br/>Public IPv4 enabled"]
+                PSG["Public security group<br/>SSH 22: My IP<br/>HTTP 80: My IP"]
+                NAT["NAT Gateway<br/>Elastic IP"]
+            end
+
+            subgraph PRIVATE["Private subnet | 10.0.1.0/24"]
+                PRIVRT["Private route table<br/>0.0.0.0/0 → NAT"]
+                PRIEC2["Private EC2<br/>No public IPv4"]
+                PRISG["Private security group<br/>SSH 22: Public EC2 SG"]
+            end
+        end
+    end
+
+    Internet <--> IGW
+    IGW <--> PEC2
+    NAT --> IGW
+    PRIEC2 --> NAT
+    PEC2 <-->|"Internal VPC communication / SSH"| PRIEC2
+
+    PRT -.-> PEC2
+    PRIVRT -.-> PRIEC2
+    PSG -.-> PEC2
+    PRISG -.-> PRIEC2
+
+    classDef internet fill:#e8eef5,stroke:#607d9b,color:#172b3a
+    classDef gateway fill:#fff0d9,stroke:#c58b36,color:#49300b
+    classDef public fill:#e7f0fa,stroke:#5882aa,color:#172b3a
+    classDef private fill:#e7f2e9,stroke:#668c70,color:#203b27
+
+    class Internet internet
+    class IGW,NAT gateway
+    class PRT,PSG,PEC2 public
+    class PRIVRT,PRISG,PRIEC2 private

@@ -1,141 +1,205 @@
 # AWS VPC & Networking
 
-A custom AWS network built from scratch using Amazon VPC, public and private subnets, Internet Gateway, NAT Gateway, route tables and EC2 instances.
+A hands-on AWS networking project focused on building a custom VPC, separating public and private workloads, and controlling how resources communicate with the internet.
 
-The goal of this project was to understand how AWS networking works in practice, particularly how resources communicate with each other and how internet access is controlled across different network segments.
+The infrastructure was built using Amazon VPC, EC2, Internet Gateway, NAT Gateway, Elastic IPs, route tables and security groups.
 
-## Architecture diagram
+## Project Overview
 
-![alt text](image.png)
-The infrastructure consists of a custom VPC with two subnets:
+The objective was to build a network from scratch and understand how AWS handles traffic between public resources, private resources and the internet.
 
-- **Public subnet:** Hosts an EC2 instance with a public IP address and direct internet connectivity through an Internet Gateway.
-- **Private subnet:** Hosts an EC2 instance without a public IP address. Outbound internet traffic is routed through a NAT Gateway.
+The VPC contains two subnets:
 
+- **Public subnet:** Hosts an EC2 instance with a public IPv4 address. Internet traffic is routed through an Internet Gateway.
+- **Private subnet:** Hosts an EC2 instance without a public IPv4 address. Outbound internet traffic is routed through a NAT Gateway.
+
+## Architecture
+
+The following diagram represents the network design and the intended traffic paths.
+
+```mermaid
+flowchart TB
+    Internet((Internet))
+
+    subgraph AWS["AWS Cloud"]
+        subgraph VPC["VPC | 10.0.0.0/16"]
+            IGW["Internet Gateway"]
+
+            subgraph PUBLIC["Public subnet | 10.0.0.0/24"]
+                PRT["Public route table<br/>0.0.0.0/0 → IGW"]
+                PSG["Public EC2 security group<br/>SSH 22: My IP<br/>HTTP 80: My IP"]
+                PEC2["Public EC2<br/>Public IPv4 enabled"]
+                NAT["NAT Gateway<br/>Elastic IP"]
+            end
+
+            subgraph PRIVATE["Private subnet | 10.0.1.0/24"]
+                PRIVRT["Private route table<br/>0.0.0.0/0 → NAT"]
+                PRISG["Private EC2 security group<br/>SSH 22: Public EC2 SG"]
+                PRIEC2["Private EC2<br/>No public IPv4"]
+            end
+        end
+    end
+
+    Internet <--> IGW
+    IGW <--> PEC2
+    PEC2 --> NAT
+    NAT --> IGW
+    PRIEC2 --> NAT
+    PEC2 <-->|"Private SSH / VPC local route"| PRIEC2
+
+    PRT -.-> PEC2
+    PRIVRT -.-> PRIEC2
+    PSG -.-> PEC2
+    PRISG -.-> PRIEC2
+
+    classDef internet fill:#e8eef5,stroke:#607d9b,color:#172b3a
+    classDef gateway fill:#fff0d9,stroke:#c58b36,color:#49300b
+    classDef public fill:#e7f0fa,stroke:#5882aa,color:#172b3a
+    classDef private fill:#e7f2e9,stroke:#668c70,color:#203b27
+
+    class Internet internet
+    class IGW,NAT gateway
+    class PRT,PSG,PEC2 public
+    class PRIVRT,PRISG,PRIEC2 private
+```
+
+*The diagram shows the intended network paths. Security group rules control which traffic is actually permitted.*
 
 ## AWS Resources
 
 | Resource | Configuration |
 |---|---|
-| VPC | 10.0.0.0/16 |
-| Public subnet | 10.0.0.0/24 |
-| Private subnet | 10.0.1.0/24 |
-| Internet Gateway | Attached to the VPC |
+| VPC | `10.0.0.0/16` |
+| Public subnet | `10.0.0.0/24` |
+| Private subnet | `10.0.1.0/24` |
+| Internet Gateway | Attached to VPC |
 | Elastic IP | Allocated for NAT Gateway |
 | NAT Gateway | Deployed in public subnet |
-| Public EC2 | Public IP enabled |
-| Private EC2 | No public IP |
+| Public EC2 | Public IPv4 enabled |
+| Private EC2 | No public IPv4 |
 
-## Network Configuration
+## Implementation
 
-### 1. VPC and Subnets
+### 1. VPC and subnet design
 
-Created a custom VPC with the CIDR block `10.0.0.0/16`.
+Created a custom VPC using the CIDR block `10.0.0.0/16`.
 
-Divided the network into two subnets:
+Divided the network into two separate subnets:
 
-- Public subnet: `10.0.0.0/24`
-- Private subnet: `10.0.1.0/24`
+- `10.0.0.0/24` – Public subnet
+- `10.0.1.0/24` – Private subnet
 
-This separation provides control over which resources can be reached directly from the internet.
+This provides network segmentation and allows different routing policies to be applied to each subnet.
 
-### 2. Internet Connectivity
+### 2. Internet connectivity
 
-**Internet Gateway (IGW)**
+Attached an Internet Gateway (IGW) to the VPC.
 
-Attached an Internet Gateway to the VPC to enable internet connectivity for resources in the public subnet.
+Created a NAT Gateway inside the public subnet and associated it with an Elastic IP.
 
-**NAT Gateway**
+The Internet Gateway provides internet connectivity for appropriately configured resources in the public subnet. The NAT Gateway allows instances in the private subnet to initiate outbound connections without requiring public IPv4 addresses.
 
-Deployed a NAT Gateway inside the public subnet and associated it with an Elastic IP.
+### 3. Route tables
 
-The NAT Gateway allows instances in the private subnet to initiate outbound connections to the internet without exposing them through public IP addresses.
-
-### 3. Route Tables
-
-Configured separate route tables for each subnet.
+Created separate route tables and associated them with their respective subnets.
 
 | Route table | Destination | Target |
 |---|---|---|
-| Public | 10.0.0.0/16 | Local |
-| Public | 0.0.0.0/0 | Internet Gateway |
-| Private | 10.0.0.0/16 | Local |
-| Private | 0.0.0.0/0 | NAT Gateway |
+| Public | `10.0.0.0/16` | Local |
+| Public | `0.0.0.0/0` | Internet Gateway |
+| Private | `10.0.0.0/16` | Local |
+| Private | `0.0.0.0/0` | NAT Gateway |
 
-The public subnet uses the Internet Gateway for external traffic, while the private subnet routes external traffic through the NAT Gateway.
+The local route enables communication between resources within the VPC. The default routes determine how traffic destined outside the VPC is handled.
 
-### 4. EC2 Deployment
+### 4. EC2 deployment
 
-Deployed two EC2 instances to test connectivity and network isolation.
+Deployed two EC2 instances to validate the network configuration.
 
 **Public EC2**
-- Launched in the public subnet.
+- Deployed in the public subnet.
 - Assigned a public IPv4 address.
-- Accessible through SSH from my permitted IP address.
-- Used as an entry point for accessing the private instance.
+- SSH access restricted to my public IP.
+- Used to establish SSH connectivity to the private instance.
 
 **Private EC2**
-- Launched in the private subnet.
-- No public IPv4 address assigned.
+- Deployed in the private subnet.
+- No public IPv4 address.
 - Outbound internet access through the NAT Gateway.
-- SSH access restricted to the public EC2 instance's security group.
+- SSH access restricted to the public EC2 security group.
 
-### 5. Security Groups
+### 5. Security groups
 
-Configured security groups to control inbound traffic.
+Configured separate security groups for the two instances.
 
-| Security group | Protocol | Port | Source |
+| Instance | Protocol | Port | Allowed source |
 |---|---|---|---|
-| Public EC2 | SSH | 22 | My public IP |
-| Public EC2 | HTTP | 80 | My public IP |
-| Private EC2 | SSH | 22 | Public EC2 security group |
+| Public EC2 | TCP | 22 | My public IP |
+| Public EC2 | TCP | 80 | My public IP |
+| Private EC2 | TCP | 22 | Public EC2 security group |
 
-Outbound traffic was configured to allow the connectivity required by the instances.
+Security groups provide instance-level traffic control. The private instance does not accept SSH connections directly from the public internet.
 
-## Testing and Validation
+## Validation
 
-After deploying the infrastructure, I performed the following checks:
+The following areas were checked during the project:
 
-- Verified that the public EC2 instance received a public IP address.
-- Connected to the public EC2 instance using SSH.
-- Verified that the private EC2 instance had no public IP address.
-- Tested SSH access from the public EC2 instance to the private EC2 instance.
-- Tested outbound internet connectivity from the private instance.
-- Verified that the private subnet used the NAT Gateway as its default route.
-- Checked that the security groups restricted access as intended.
+- Public EC2 placement and public IP assignment.
+- SSH connectivity to the public instance.
+- Private EC2 placement without a public IP.
+- Private instance access from the public instance.
+- Outbound internet connectivity through the NAT Gateway.
+- Route table associations and default routes.
+- Security group inbound rules.
 
-## Key Concepts Learned
+See [Deployment Notes](docs/deployment-notes.md) for the validation checklist and test evidence.
 
-Through this project, I gained practical experience with:
+## Key Takeaways
 
-- AWS VPC architecture and CIDR addressing.
-- Public and private subnet segmentation.
-- Internet Gateway vs. NAT Gateway.
-- Route tables and traffic routing.
-- Elastic IP allocation.
-- EC2 networking and public/private IP addressing.
-- Security groups and network access control.
-- SSH connectivity between instances.
+The project helped reinforce several important AWS networking concepts:
 
-## Lessons Learned
+- A subnet is public or private based on its routing configuration.
+- An Internet Gateway alone does not make an EC2 instance publicly reachable.
+- Public IPv4 addressing, routing and security group rules must work together.
+- NAT Gateway provides outbound connectivity for private instances.
+- VPC-local routing allows communication between subnets without using an Internet Gateway.
+- Security groups can reference other security groups instead of relying on fixed IP addresses.
 
-One important takeaway was understanding that launching an EC2 instance in a public subnet does not automatically make it accessible from the internet.
+## Limitations and Future Improvements
 
-Internet connectivity depends on several components working together: public IP addressing, routing through an Internet Gateway and correctly configured security groups.
+This is a foundational networking setup rather than a production-ready architecture.
 
-I also learned that a private instance can access external services through a NAT Gateway without needing a public IP address.
+Some improvements I would explore next:
 
-## Project Cleanup
+- Deploy subnets across multiple Availability Zones.
+- Introduce a second NAT Gateway for improved availability.
+- Use AWS Systems Manager Session Manager instead of direct SSH administration.
+- Enable VPC Flow Logs for network traffic analysis.
+- Rebuild the infrastructure using Terraform.
+- Add automated infrastructure validation.
 
-AWS networking resources such as NAT Gateways and Elastic IPs can generate costs even when they are not actively being used.
+## Cost Considerations
 
-After completing the project, the resources should be deleted to avoid unnecessary charges.
+NAT Gateways incur hourly and data processing charges. EC2, storage and public IPv4 resources can also generate costs.
 
-## Documentation
+Resources should be removed after testing if they are no longer needed. See the deployment notes for the cleanup order.
 
-- [Architecture](docs/architecture.md)
-- [Deployment Notes](docs/deployment-notes.md)
+## Repository Structure
+
+```text
+vpc-networking/
+├── README.md
+├── docs/
+│   ├── architecture.md
+│   └── deployment-notes.md
+├── diagrams/
+│   └── vpc-architecture.mmd
+└── screenshots/
+```
 
 ---
 
-**Built as part of my hands-on AWS and DevOps learning journey.**
+**Project:** AWS VPC & Networking  
+**Focus:** Cloud Networking | AWS | Infrastructure | Security
+
+Part of my ongoing hands-on DevOps and Cloud engineering learning journey.
